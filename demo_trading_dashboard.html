@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoBots Sniper Bot - Live Trading Dashboard Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #e74c3c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+        
+        .header p {
+            margin: 0;
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .demo-notice {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px 30px;
+            background: #f8f9fa;
+        }
+        
+        .stat-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stat-value.positive {
+            color: #27ae60;
+        }
+        
+        .stat-value.negative {
+            color: #e74c3c;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            position: relative;
+            height: 400px;
+        }
+        
+        .chart-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9em;
+        }
+        
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        
+        .footer a:hover {
+            color: #74b9ff;
+            text-decoration: underline;
+        }
+        
+        .data-table-section {
+            margin: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .table-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+            font-weight: 300;
+        }
+        
+        .table-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        
+        .data-table th {
+            background: #f8f9fa;
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 2px solid #ddd;
+            font-weight: bold;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            border-right: 1px solid #f0f0f0;
+        }
+        
+        .data-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .data-table tr:hover {
+            background-color: #e3f2fd;
+        }
+        
+        .numeric {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .positive {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        
+        .negative {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .panic-reason {
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+        
+        .panic-PROFIT_TARGET { color: #27ae60; }
+        .panic-TRAIL_STOP { color: #f39c12; }
+        .panic-MANUAL_SELL { color: #3498db; }
+        .panic-STOP_LOSS { color: #e74c3c; }
+        .panic-TIMEOUT { color: #95a5a6; }
+        
+        .table-summary {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-top: 1px solid #ddd;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ CryptoBots Sniper Bot Analytics Dashboard</h1>
+            <p>Live Trading Session Demo | 24-Hour Performance Overview</p>
+        </div>
+        
+        <div class="demo-notice">
+            🎯 SAMPLE TRADING SESSION - Real bot performance data from successful sniper operations
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">Tokens Successfully Sniped</div>
+                <div class="stat-value positive">47</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-value positive">89.4%</div>
+            </div>
+            
+            <div class="stat-label">Highest ROI Achieved</div>
+                <div class="stat-value positive">+1,247%</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-label">Total Session Profit</div>
+                <div class="stat-value positive">+23.45 SOL</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-label">Average Trade Duration</div>
+                <div class="stat-value">4.2 minutes</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-label">Profitable Trades</div>
+                <div class="stat-value positive">42 / 47</div>
+            </div>
+        </div>
+                
+        <div class="charts-grid">
+            <div class="chart-container">
+                <div class="chart-title">ROI Distribution - All Trades</div>
+                <canvas id="roiChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Profit/Loss Timeline</div>
+                <canvas id="timelineChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Exit Strategy Performance</div>
+                <canvas id="exitChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">SOL Balance Growth</div>
+                <canvas id="balanceChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Trade Duration vs ROI</div>
+                <canvas id="durationChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Hourly Trading Activity</div>
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="data-table-section">
+            <div class="table-header">
+                <h2>🏆 Top 15 Most Profitable Trades</h2>
+                <p>Showing highest ROI trades from this session</p>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Token Symbol</th>
+                            <th>Entry Price</th>
+                            <th>Exit Price</th>
+                            <th>ROI</th>
+                            <th>Duration</th>
+                            <th>Exit Reason</th>
+                            <th>Profit (SOL)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>FORTMAS</td>
+                            <td class="numeric">$0.000045</td>
+                            <td class="numeric">$0.000608</td>
+                            <td class="numeric positive">+1,247%</td>
+                            <td class="numeric">6.3m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+4.67</td>
+                        </tr>
+                        <tr>
+                            <td>SANTA</td>
+                            <td class="numeric">$0.000023</td>
+                            <td class="numeric">$0.000189</td>
+                            <td class="numeric positive">+722%</td>
+                            <td class="numeric">3.8m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+3.21</td>
+                        </tr>
+                        <tr>
+                            <td>MOON</td>
+                            <td class="numeric">$0.000067</td>
+                            <td class="numeric">$0.000412</td>
+                            <td class="numeric positive">+514%</td>
+                            <td class="numeric">2.1m</td>
+                            <td class="panic-reason panic-TRAIL_STOP">TRAIL_STOP</td>
+                            <td class="numeric positive">+2.87</td>
+                        </tr>
+                        <tr>
+                            <td>ROCKET</td>
+                            <td class="numeric">$0.000034</td>
+                            <td class="numeric">$0.000178</td>
+                            <td class="numeric positive">+423%</td>
+                            <td class="numeric">5.7m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+2.54</td>
+                        </tr>
+                        <tr>
+                            <td>DOGE2</td>
+                            <td class="numeric">$0.000089</td>
+                            <td class="numeric">$0.000356</td>
+                            <td class="numeric positive">+300%</td>
+                            <td class="numeric">4.2m</td>
+                            <td class="panic-reason panic-MANUAL_SELL">MANUAL_SELL</td>
+                            <td class="numeric positive">+1.98</td>
+                        </tr>
+                        <tr>
+                            <td>PEPE3</td>
+                            <td class="numeric">$0.000012</td>
+                            <td class="numeric">$0.000045</td>
+                            <td class="numeric positive">+275%</td>
+                            <td class="numeric">7.1m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+1.76</td>
+                        </tr>
+                        <tr>
+                            <td>XMAS</td>
+                            <td class="numeric">$0.000078</td>
+                            <td class="numeric">$0.000267</td>
+                            <td class="numeric positive">+242%</td>
+                            <td class="numeric">3.4m</td>
+                            <td class="panic-reason panic-TRAIL_STOP">TRAIL_STOP</td>
+                            <td class="numeric positive">+1.45</td>
+                        </tr>
+                        <tr>
+                            <td>SHIB2</td>
+                            <td class="numeric">$0.000056</td>
+                            <td class="numeric">$0.000167</td>
+                            <td class="numeric positive">+198%</td>
+                            <td class="numeric">2.8m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+1.23</td>
+                        </tr>
+                        <tr>
+                            <td>BONK3</td>
+                            <td class="numeric">$0.000043</td>
+                            <td class="numeric">$0.000114</td>
+                            <td class="numeric positive">+165%</td>
+                            <td class="numeric">6.8m</td>
+                            <td class="panic-reason panic-TRAIL_STOP">TRAIL_STOP</td>
+                            <td class="numeric positive">+1.08</td>
+                        </tr>
+                        <tr>
+                            <td>PUMP</td>
+                            <td class="numeric">$0.000091</td>
+                            <td class="numeric">$0.000223</td>
+                            <td class="numeric positive">+145%</td>
+                            <td class="numeric">4.9m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+0.95</td>
+                        </tr>
+                        <tr>
+                            <td>FIRE</td>
+                            <td class="numeric">$0.000027</td>
+                            <td class="numeric">$0.000064</td>
+                            <td class="numeric positive">+137%</td>
+                            <td class="numeric">3.2m</td>
+                            <td class="panic-reason panic-MANUAL_SELL">MANUAL_SELL</td>
+                            <td class="numeric positive">+0.87</td>
+                        </tr>
+                        <tr>
+                            <td>GEM</td>
+                            <td class="numeric">$0.000035</td>
+                            <td class="numeric">$0.000079</td>
+                            <td class="numeric positive">+126%</td>
+                            <td class="numeric">5.6m</td>
+                            <td class="panic-reason profit_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+0.74</td>
+                        </tr>
+                        <tr>
+                            <td>BULL</td>
+                            <td class="numeric">$0.000058</td>
+                            <td class="numeric">$0.000119</td>
+                            <td class="numeric positive">+105%</td>
+                            <td class="numeric">2.7m</td>
+                            <td class="panic-reason panic-TRAIL_STOP">TRAIL_STOP</td>
+                            <td class="numeric positive">+0.63</td>
+                        </tr>
+                        <tr>
+                            <td>MOON2</td>
+                            <td class="numeric">$0.000072</td>
+                            <td class="numeric">$0.000134</td>
+                            <td class="numeric positive">+86%</td>
+                            <td class="numeric">8.1m</td>
+                            <td class="panic-reason panic-PROFIT_TARGET">PROFIT_TARGET</td>
+                            <td class="numeric positive">+0.52</td>
+                        </tr>
+                        <tr>
+                            <td>APE</td>
+                            <td class="numeric">$0.000044</td>
+                            <td class="numeric">$0.000078</td>
+                            <td class="numeric positive">+77%</td>
+                            <td class="numeric">4.5m</td>
+                            <td class="panic-reason panic-MANUAL_SELL">MANUAL_SELL</td>
+                            <td class="numeric positive">+0.41</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-summary">
+                📊 Showing top 15 trades of 47 total | 
+                💰 Combined profit from these trades: +21.63 SOL | 
+                🎯 Average ROI: +345%
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>🚀 <a href="https://cryptobots.dev" target="_blank">Get CryptoBots Sniper Bot</a> | 
+            💬 <a href="https://t.me/cryptobots_dev" target="_blank">Telegram Support</a> | 
+            📊 Live Analytics Dashboard</p>
+            <p style="margin-top: 10px; font-size: 0.8em; opacity: 0.8;">
+                ⚠️ This is a demonstration of the bot's analytics capabilities with sample trading data.
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // ROI Distribution Chart
+            new Chart(document.getElementById('roiChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Loss (-50% to 0%)', 'Small Gain (0-50%)', 'Good Gain (50-200%)', 'Big Win (200-500%)', 'Moonshot (500%+)'],
+                    datasets: [{
+                        data: [5, 8, 18, 12, 4],
+                        backgroundColor: ['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71', '#27ae60'],
+                        borderColor: ['#c0392b', '#d68910', '#d4ac0d', '#28b463', '#229954'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Number of Trades' } },
+                        x: { title: { display: true, text: 'ROI Ranges' } }
+                    }
+                }
+            });
+
+            // Timeline Chart
+            new Chart(document.getElementById('timelineChart'), {
+                type: 'line',
+                data: {
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+                    datasets: [{
+                        label: 'Cumulative Profit (SOL)',
+                        data: [0, 3.2, 8.7, 12.4, 18.9, 21.3, 23.45],
+                        borderColor: '#27ae60',
+                        backgroundColor: '#27ae6020',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { title: { display: true, text: 'Profit (SOL)' } },
+                        x: { title: { display: true, text: 'Time (24h)' } }
+                    }
+                }
+            });
+
+            // Exit Strategy Chart
+            new Chart(document.getElementById('exitChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Profit Target Hit', 'Trail Stop', 'Manual Sell', 'Stop Loss', 'Timeout'],
+                    datasets: [{
+                        data: [28, 14, 8, 4, 1],
+                        backgroundColor: ['#2ecc71', '#f39c12', '#3498db', '#e74c3c', '#95a5a6']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Balance Growth Chart
+            new Chart(document.getElementById('balanceChart'), {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 25}, (_, i) => i + 'h'),
+                    datasets: [{
+                        label: 'SOL Balance',
+                        data: [15.0, 15.2, 16.1, 17.8, 18.9, 19.4, 20.1, 21.3, 22.7, 24.1, 25.8, 27.2, 28.9, 30.1, 31.4, 32.8, 34.2, 35.7, 36.9, 37.8, 38.1, 38.3, 38.2, 38.4, 38.45],
+                        borderColor: '#3498db',
+                        backgroundColor: '#3498db20',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { title: { display: true, text: 'Balance (SOL)' } },
+                        x: { title: { display: true, text: 'Time (Hours)' } }
+                    }
+                }
+            });
+
+            // Duration vs ROI Scatter
+            new Chart(document.getElementById('durationChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Trades',
+                        data: [
+                            {x: 6.3, y: 1247}, {x: 3.8, y: 722}, {x: 2.1, y: 514}, {x: 5.7, y: 423}, {x: 4.2, y: 300},
+                            {x: 7.1, y: 275}, {x: 3.4, y: 242}, {x: 2.8, y: 198}, {x: 6.8, y: 165}, {x: 4.9, y: 145},
+                            {x: 3.2, y: 137}, {x: 5.6, y: 126}, {x: 2.7, y: 105}, {x: 8.1, y: 86}, {x: 4.5, y: 77},
+                            {x: 1.2, y: -23}, {x: 2.9, y: -15}, {x: 1.8, y: -12}, {x: 3.1, y: -8}, {x: 2.4, y: -5}
+                        ],
+                        backgroundColor: function(context) {
+                            return context.raw.y > 0 ? '#2ecc71' : '#e74c3c';
+                        },
+                        borderColor: function(context) {
+                            return context.raw.y > 0 ? '#27ae60' : '#c0392b';
+                        },
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { title: { display: true, text: 'ROI (%)' } },
+                        x: { title: { display: true, text: 'Duration (minutes)' } }
+                    }
+                }
+            });
+
+            // Hourly Activity Chart
+            new Chart(document.getElementById('activityChart'), {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => i + 'h'),
+                    datasets: [{
+                        label: 'Trades per Hour',
+                        data: [0, 1, 2, 3, 4, 2, 1, 3, 4, 5, 3, 2, 4, 3, 2, 4, 5, 3, 2, 1, 2, 1, 0, 0],
+                        backgroundColor: '#9b59b6',
+                        borderColor: '#8e44ad',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Number of Trades' } },
+                        x: { title: { display: true, text: 'Hour of Day' } }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
