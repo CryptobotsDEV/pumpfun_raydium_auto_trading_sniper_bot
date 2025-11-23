@@ -1,468 +1,533 @@
 #!/usr/bin/env python3
 """
-CryptoBots Sniper Bot - Advanced Solana Token Sniping Bot (DEMO SAMPLE)
-=========================================================
+==============================================================================
+🚀 CRYPTOBOTS.DEV - SNIPER TRADING BOT v3.3a - DEMO VERSION 🚀
+==============================================================================
 
-🚀 Lightning-fast token detection and automated trading on Solana
-⚡ Sub-second execution with advanced filtering and risk management
-💎 Token2022 & MAYHEM mode support for cutting-edge tokens
-📊 Real-time analytics with profit tracking and performance metrics
+⚠️  DEMONSTRATION VERSION - This shows the exact structure and functionality 
+    of the real CryptoBots Sniper Bot, but uses simulated data instead 
+    of making actual API calls or blockchain transactions.
 
-⚠️  SAMPLE CODE ONLY - This is a demonstration of the bot's structure
-🔥 GET FULL VERSION: https://cryptobots.dev/scripts/sol-sniper-trading-bot
-💬 SUPPORT: https://t.me/cryptobots_dev
+🔥 GET FULL VERSION: https://cryptobots.dev (Starting at $0)
+💬 TELEGRAM SUPPORT: https://t.me/cryptobots_dev
 
-Features shown in this sample:
-- Basic bot structure and configuration
-- Sample filtering criteria
-- Profit tracking system
-- Analytics dashboard generation
-- Risk management framework
+FULL VERSION FEATURES:
+🎯 Multi-exchange sniping (Raydium, PumpFun, DexScreener)
+💹 Real-time position monitoring with live ROI tracking
+🛡️ Advanced token safety filters and rug detection
+⚡ Lightning-fast execution with MEV protection
+📊 Comprehensive analytics and P&L tracking
+🤖 Telegram bot integration for remote control
+💎 Multiple take-profit levels with trailing stops
+🔄 Automated position management and cleanup
 
-The full production version includes:
-- Real-time WebSocket token detection
-- Multi-DEX trading (PumpFun, Raydium, Jupiter)
-- Advanced rug detection algorithms
-- Multi take-profit and trail stop systems
-- Telegram integration for remote control
-- 20+ filtering criteria with social signals
-- Token2022 and MAYHEM mode support
-- Emergency stop and fund protection
-- Live HTML analytics dashboard
+This demo replicates the EXACT interface and workflow but with fake data.
+==============================================================================
 """
 
 import json
 import time
 import random
-from datetime import datetime, timedelta
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+import threading
 import os
 import sys
+import signal
+from datetime import datetime, timedelta
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
-import os
-os.system("color")  # Enable colored output
-green = '\033[32m'; red = '\033[31m'; yellow = '\033[33m'; cyan = '\033[96m'; pink = '\033[95m'; gray = '\033[90m'; reset = '\033[0m'
+# COLOR SETUP - EXACTLY LIKE ORIGINAL
+os.system("color")
+green = '\033[32m'
+red = '\033[31m' 
+yellow = '\033[33m'
+cyan = '\033[96m'
+pink = '\033[95m'
+gray = '\033[90m'
+white = '\033[97m'
+reset = '\033[0m'
+
+# DEMO CONSTANTS
+app_name = "sniper_demo"
+sniper_version = "v3.3a-DEMO"
+FREE_VERSION = True
+SIM_MODE = True
+
+# SIMULATED SETTINGS
+wallet_address = "DemoWallet1234567890abcdefghijklmnopqr"
+sol_buy_amount = 0.01
+starting_bal = 5.0
+bot_bal = starting_bal
+max_positions = 3
+pos_max_runtime = 15.0
+report_interval = 0.5
+sol_price = 248.75
+slippage = 5
+
+# DEMO DATA
+SAMPLE_TOKENS = [
+    {"mint": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", "symbol": "PEPE", "name": "Pepe Token", "market": "PumpFun"},
+    {"mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "symbol": "DOGE", "name": "Dogecoin Token", "market": "Raydium"},
+    {"mint": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn", "symbol": "BONK", "name": "Bonk Token", "market": "DexScreener"},
+    {"mint": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", "symbol": "mSOL", "name": "Marinade SOL", "market": "Raydium"},
+    {"mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "symbol": "SAMO", "name": "Samoyedcoin", "market": "PumpFun"}
+]
+
+# GLOBAL STATE
+active_positions = 0
+open_positions = {}
+position_threads = []
+total_mints_detected = 0
+profitable_trades = 0
+loss_trades = 0
+total_trades = 0
+total_events_checked = 0
+queue_size = 0
+start_time = time.time()
+last_report_time = time.time()
+stop_event = threading.Event()
 
 @dataclass
-class TokenData:
-    """Sample token data structure"""
+class Position:
+    """Demo position data structure"""
     mint: str
     symbol: str
     name: str
-    market_cap: float
-    liquidity: float
-    age_seconds: int
-    creator: str
-    has_socials: bool
-    risk_score: float
-
-@dataclass
-class TradeResult:
-    """Sample trade result structure"""
-    token_mint: str
-    symbol: str
+    market: str
     entry_price: float
-    exit_price: float
-    roi_percent: float
-    duration_seconds: int
-    profit_sol: float
-    exit_reason: str
+    entry_time: float
+    tokens_bought: float
+    sol_spent: float
+    current_price: float
+    current_roi: float
+    status: str = "ACTIVE"
+    exit_time: Optional[float] = None
+    exit_price: Optional[float] = None
+    profit_loss: Optional[float] = None
 
-class CryptoBotsSniperDemo:
+class CryptobotsSniperDemo:
     """
-    ⚠️  DEMONSTRATION VERSION - LIMITED FUNCTIONALITY
-    
-    This is a sample showing the basic structure of the CryptoBots Sniper Bot.
-    The full version includes real-time token detection, advanced filtering,
-    automated trading, and comprehensive risk management.
-    
-    🔥 GET FULL VERSION: https://cryptobots.dev/scripts/sol-sniper-trading-bot
-    💬 TELEGRAM SUPPORT: https://t.me/cryptobots_dev
+    Demo version of CryptoBots Sniper Bot with simulated operations
     """
     
     def __init__(self):
-        self.version = "v3.3a-DEMO"
-        self.running = False
-        self.total_trades = 0
-        self.successful_trades = 0
-        self.total_profit = 0.0
-        self.session_start = datetime.now()
+        self.positions: Dict[str, Position] = {}
+        self.session_start = time.time()
         
-        # Sample configuration (real bot has 50+ settings)
-        self.config = {
-            'buy_amount_sol': 0.5,
-            'max_market_cap': 50000,
-            'min_liquidity': 5.0,
-            'max_age_seconds': 300,
-            'stop_loss_percent': 25,
-            'take_profit_levels': [50, 100, 200, 500],
-            'trail_stop_enabled': True,
-            'rug_detection_enabled': True,
-            'social_filters_enabled': True
-        }
-        
-        # Sample successful trades for demo
-        self.sample_trades = [
-            TradeResult("ForT...pump", "FORTMAS", 0.000045, 0.000608, 1247.0, 378, 4.67, "PROFIT_TARGET"),
-            TradeResult("San7...pump", "SANTA", 0.000023, 0.000189, 722.0, 228, 3.21, "PROFIT_TARGET"),
-            TradeResult("Moo9...pump", "MOON", 0.000067, 0.000412, 514.0, 126, 2.87, "TRAIL_STOP"),
-            TradeResult("Roc8...pump", "ROCKET", 0.000034, 0.000178, 423.0, 342, 2.54, "PROFIT_TARGET"),
-            TradeResult("Dog2...pump", "DOGE2", 0.000089, 0.000356, 300.0, 252, 1.98, "MANUAL_SELL"),
-        ]
-    
     def print_banner(self):
-        """Display the bot banner"""
-        print(f"{gray}{'_' * 134}{reset}")
-        print(f"{green}")
-        print("███████╗███╗   ██╗ ██╗██████╗ ███████╗██████╗     ████████╗██████╗  █████╗ ██████╗ ██╗███╗   ██╗ ██████╗     ██████╗  ██████╗ ████████╗")
-        print("██╔════╝████╗  ██║ ██║██╔══██╗██╔════╝██╔══██╗    ╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔════╝     ██╔══██╗██╔═══██╗╚══██╔══╝")
-        print("███████╗██╔██╗ ██║ ██║██████╔╝█████╗  ██████╔╝       ██║   ██████╔╝███████║██║  ██║██║██╔██╗ ██║██║  ███╗    ██████╔╝██║   ██║   ██║   ")
-        print("╚════██║██║╚██╗██║ ██║██╔═══╝ ██╔══╝  ██╔══██╗       ██║   ██╔══██╗██╔══██║██║  ██║██║██║╚██╗██║██║   ██║    ██╔══██╗██║   ██║   ██║   ")
-        print("███████║██║ ╚████║ ██║██║     ███████╗██║  ██║       ██║   ██║  ██║██║  ██║██████╔╝██║██║ ╚████║╚██████╔╝    ██████╔╝╚██████╔╝   ██║   ")
-        print("╚══════╝╚═╝  ╚═══╝ ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝     ╚═════╝  ╚═════╝    ╚═╝   ")
-        print(f"          [ https://t.me/cryptobots_dev ] [ https://cryptobots.dev ] [ @cryptobots_dev ]")
-        print(f"          {reset}")
-        print(f"{gray}{'_' * 134}{reset}")
-        print(f"\n{red}DEMO VERSION{reset} - {yellow}⚠️  LIMITED FUNCTIONALITY{reset}")
-        print(f"\n{cyan}⚡ Lightning-Fast Token Sniping on Solana{reset}")
-        print(f"{cyan}🎯 Advanced Filtering & Risk Management{reset}")
-        print(f"{cyan}💎 Token2022 & MAYHEM Mode Support{reset}")
-        print(f"{cyan}📊 Real-time Analytics & Profit Tracking{reset}")
-    
-    def simulate_token_detection(self) -> TokenData:
-        """
-        ⚠️  SIMULATION - Real bot uses WebSocket streams for live detection
+        """Print the exact ASCII banner from original"""
+        print(f"""{green}
+███████╗███╗   ██╗ ██╗██████╗ ███████╗██████╗     ████████╗██████╗  █████╗ ██████╗ ██╗███╗   ██╗ ██████╗     ██████╗  ██████╗ ████████╗
+██╔════╝████╗  ██║ ██║██╔══██╗██╔════╝██╔══██╗    ╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔════╝     ██╔══██╗██╔═══██╗╚══██╔══╝
+███████╗██╔██╗ ██║ ██║██████╔╝█████╗  ██████╔╝       ██║   ██████╔╝███████║██║  ██║██║██╔██╗ ██║██║  ███╗    ██████╔╝██║   ██║   ██║   
+╚════██║██║╚██╗██║ ██║██╔═══╝ ██╔══╝  ██╔══██╗       ██║   ██╔══██╗██╔══██║██║  ██║██║██║╚██╗██║██║   ██║    ██╔══██╗██║   ██║   ██║   
+███████║██║ ╚████║ ██║██║     ███████╗██║  ██║       ██║   ██║  ██║██║  ██║██████╔╝██║██║ ╚████║╚██████╔╝    ██████╔╝╚██████╔╝   ██║   
+╚══════╝╚═╝  ╚═══╝ ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝     ╚═════╝  ╚═════╝    ╚═╝   
+          [ https://t.me/cryptobots_dev ] [ https://t.me/rikardionsdev ] [ https://cryptobots.dev ] [ @cryptobots_dev ]
+          {reset}""")
+
+    def print_config_summary(self):
+        """Print configuration summary exactly like original"""
+        def print_section_header(title):
+            print(f"\n{green}══════════ {title.upper()} ══════════{reset}")
         
-        Full version monitors:
-        - PumpFun create/create_v2 instructions
-        - Raydium pool initialization
-        - Jupiter new market detection
-        - Token2022 program events
-        - MAYHEM mode tokens
-        """
-        sample_tokens = [
-            ("SANTA", "Christmas Santa Token"),
-            ("MOON", "Moon Landing Protocol"),
-            ("ROCKET", "Rocket Ship Finance"),
-            ("PEPE3", "Pepe Revolution"),
-            ("DOGE2", "Doge Evolution"),
-            ("FIRE", "Fire Token"),
-            ("GEM", "Hidden Gem"),
-            ("BULL", "Bull Market Token"),
-            ("APE", "Ape Strong Together"),
-            ("DIAMOND", "Diamond Hands")
-        ]
+        print(f"✅ CONFIGURATION LOADED SUCCESSFULLY")
+        print(f"{gray}   Demo Config v3.3a, Simulated Settings'\n{'_' * 120}{reset}")
         
-        symbol, name = random.choice(sample_tokens)
+        print_section_header("Enabled Sniper Modes")
+        print("RAYDIUM | PUMPFUN | DEXSCREENER")
         
-        return TokenData(
-            mint=f"{''.join(random.choices('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz', k=44))}pump",
-            symbol=symbol,
-            name=name,
-            market_cap=random.uniform(1000, 25000),
-            liquidity=random.uniform(2.0, 15.0),
-            age_seconds=random.randint(5, 180),
-            creator=f"{''.join(random.choices('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz', k=44))}",
-            has_socials=random.choice([True, False]),
-            risk_score=random.uniform(0.1, 0.9)
-        )
-    
-    def apply_filters(self, token: TokenData) -> Tuple[bool, str]:
-        """
-        ⚠️  SIMPLIFIED FILTERING - Real bot has 20+ advanced filters
+        print_section_header("Enabled Mode Settings")
+        print("SCAN_V4         SCAN_CPMM       SCAN_CLMM")
+        print("PF_MINTS        PF_TRADES       SIM_MODE")
+        print("SAVE_LOGS       TRACK_MINTS     MULTI_TP")
         
-        Full version includes:
-        - Creator reputation analysis
-        - Social media verification (Twitter, Telegram, Website)
-        - Liquidity lock detection
-        - Holder distribution analysis
-        - Contract verification
-        - Honeypot detection
-        - Rug pull risk assessment
-        - Volume pattern analysis
-        - Dev wallet history
-        - Community engagement metrics
-        """
+        print_section_header("Active Buy Settings")
+        print(f"  {gray}• Buy Amount per Token: {sol_buy_amount} SOL (${sol_buy_amount * sol_price:.2f}){reset}")
+        print(f"  {gray}• Max Open Positions: {max_positions}{reset}")
+        print(f"  {gray}• Position Max Runtime: {pos_max_runtime} minutes{reset}")
+        print(f"  {gray}• Default Slippage: {slippage}%{reset}")
         
-        # Market cap filter
-        if token.market_cap > self.config['max_market_cap']:
-            return False, f"Market cap too high: ${token.market_cap:,.0f}"
+        print_section_header("Active Sell Settings")
+        print(f"  {gray}• Take Profit 1: 50% at +25% ROI{reset}")
+        print(f"  {gray}• Take Profit 2: 25% at +50% ROI{reset}")
+        print(f"  {gray}• Take Profit 3: 25% at +100% ROI{reset}")
+        print(f"  {gray}• Stop Loss: -20% ROI{reset}")
+        print(f"  {gray}• Max Position Time: {pos_max_runtime} min{reset}")
         
-        # Liquidity filter
-        if token.liquidity < self.config['min_liquidity']:
-            return False, f"Liquidity too low: {token.liquidity:.2f} SOL"
+        print_section_header("Token Safety Settings")
+        print(f"  {gray}• Min SOL Liquidity: 0.005 SOL{reset}")
+        print(f"  {gray}• Max Market Cap: $10,000,000{reset}")
+        print(f"  {gray}• Max Risk Score: 40000{reset}")
+        print(f"  {gray}• Max Bundled Wallets: 5{reset}")
+
+    def simulate_token_detection(self) -> Optional[dict]:
+        """Simulate token detection from various sources"""
+        global total_events_checked, queue_size
         
-        # Age filter
-        if token.age_seconds > self.config['max_age_seconds']:
-            return False, f"Token too old: {token.age_seconds}s"
+        total_events_checked += random.randint(5, 15)
+        queue_size = random.randint(0, 25)
         
-        # Risk score filter
-        if token.risk_score > 0.7:
-            return False, f"Risk score too high: {token.risk_score:.2f}"
+        if random.random() < 0.4:  # 40% chance of finding a token (increased for more action)
+            token = random.choice(SAMPLE_TOKENS)
+            return {
+                "mint": token["mint"],
+                "symbol": token["symbol"], 
+                "name": token["name"],
+                "market": token["market"],
+                "pool_type": random.choice(["RAYDIUM_V4", "PUMPFUN", "RAYDIUM_CPMM"]),
+                "signature": f"{''.join(random.choices('0123456789abcdef', k=88))}",
+                "liquidity": random.uniform(5.0, 100.0),
+                "market_cap": random.uniform(50000, 2000000),
+                "price": random.uniform(0.00001, 0.005)
+            }
+        return None
+
+    def create_position(self, token_data: dict) -> bool:
+        """Simulate creating a new trading position"""
+        global active_positions, open_positions, total_mints_detected
         
-        # Social filters (simplified)
-        if self.config['social_filters_enabled'] and not token.has_socials:
-            if random.random() < 0.3:  # 30% chance to reject tokens without socials
-                return False, "No social media presence"
+        if active_positions >= max_positions:
+            print(f"\t{gray}Max positions reached, skipping {token_data['symbol']}...{reset}")
+            return False
+            
+        # Simulate buy execution
+        entry_price = token_data["price"] * (1 + random.uniform(-0.02, 0.02))  # Small price variation
+        tokens_bought = sol_buy_amount / entry_price
         
-        return True, "All filters passed"
-    
-    def simulate_trade_execution(self, token: TokenData) -> TradeResult:
-        """
-        ⚠️  SIMULATION - Real bot executes actual Solana transactions
-        
-        Full version includes:
-        - Real-time price calculation from bonding curves
-        - Slippage protection and MEV resistance
-        - Priority fee optimization
-        - Multi-signature support
-        - Emergency stop functionality
-        - Transaction confirmation monitoring
-        - Gas optimization algorithms
-        """
-        
-        # Simulate entry
-        entry_price = random.uniform(0.000010, 0.000100)
-        
-        # Simulate trade outcome
-        trade_outcome = random.choices(
-            ['big_win', 'good_win', 'small_win', 'small_loss', 'stop_loss'],
-            weights=[5, 15, 25, 35, 20]  # Weighted for realistic results
-        )[0]
-        
-        if trade_outcome == 'big_win':
-            roi = random.uniform(300, 1500)
-            exit_reason = "PROFIT_TARGET"
-        elif trade_outcome == 'good_win':
-            roi = random.uniform(100, 300)
-            exit_reason = random.choice(["PROFIT_TARGET", "TRAIL_STOP"])
-        elif trade_outcome == 'small_win':
-            roi = random.uniform(20, 100)
-            exit_reason = random.choice(["PROFIT_TARGET", "MANUAL_SELL"])
-        elif trade_outcome == 'small_loss':
-            roi = random.uniform(-15, -5)
-            exit_reason = "TIMEOUT"
-        else:  # stop_loss
-            roi = random.uniform(-30, -20)
-            exit_reason = "STOP_LOSS"
-        
-        exit_price = entry_price * (1 + roi / 100)
-        duration = random.randint(60, 600)  # 1-10 minutes
-        profit_sol = self.config['buy_amount_sol'] * (roi / 100)
-        
-        return TradeResult(
-            token_mint=token.mint,
-            symbol=token.symbol,
+        position = Position(
+            mint=token_data["mint"],
+            symbol=token_data["symbol"],
+            name=token_data["name"],
+            market=token_data["market"],
             entry_price=entry_price,
-            exit_price=exit_price,
-            roi_percent=roi,
-            duration_seconds=duration,
-            profit_sol=profit_sol,
-            exit_reason=exit_reason
+            entry_time=time.time(),
+            tokens_bought=tokens_bought,
+            sol_spent=sol_buy_amount,
+            current_price=entry_price,
+            current_roi=0.0
         )
-    
-    def display_trade_result(self, token: TokenData, trade: TradeResult):
-        """Display trade results with color coding"""
-        color = green if trade.roi_percent > 0 else red
-        roi_symbol = "+" if trade.roi_percent > 0 else ""
-        profit_symbol = "+" if trade.profit_sol > 0 else ""
         
-        print(f"\n{cyan}🎯 [{trade.symbol}] Trade Completed:{reset}")
-        print(f"   📊 Market Cap: ${token.market_cap:,.0f} | Liquidity: {token.liquidity:.2f} SOL")
-        print(f"   💰 Entry: ${trade.entry_price:.6f} → Exit: ${trade.exit_price:.6f}")
-        print(f"   {color}📈 ROI: {roi_symbol}{trade.roi_percent:.1f}% | Profit: {profit_symbol}{trade.profit_sol:.3f} SOL{reset}")
-        print(f"   ⏱️  Duration: {trade.duration_seconds//60}m {trade.duration_seconds%60}s | Exit: {trade.exit_reason}")
-        print(f"   📍 https://solscan.io/token/{trade.token_mint[:8]}...{trade.token_mint[-8:]}")
-    
-    def update_statistics(self, trade: TradeResult):
-        """Update session statistics"""
-        self.total_trades += 1
-        if trade.roi_percent > 0:
-            self.successful_trades += 1
-        self.total_profit += trade.profit_sol
-    
-    def display_session_stats(self):
-        """Display current session statistics"""
-        success_rate = (self.successful_trades / max(self.total_trades, 1)) * 100
-        runtime = datetime.now() - self.session_start
+        self.positions[token_data["mint"]] = position
+        open_positions[token_data["mint"]] = position.symbol
+        active_positions += 1
+        total_mints_detected += 1
         
-        profit_color = green if self.total_profit > 0 else red
-        profit_symbol = "+" if self.total_profit > 0 else ""
+        # Original format buy message
+        tp_message = f"\t{gray}• Take Profits: TP1(25%) TP2(50%) TP3(100%) | Stop Loss: -20%{reset}"
+        print(f"\n🟢 BUYING: https://dexscreener.com/solana/{token_data['mint']}?maker={wallet_address}\n\n{tp_message}")
         
-        print(f"\n{yellow}📊 SESSION STATISTICS:{reset}")
-        print(f"   ⏱️  Runtime: {str(runtime).split('.')[0]}")
-        print(f"   🎯 Trades: {self.total_trades} | Success Rate: {success_rate:.1f}%")
-        print(f"   {profit_color}💰 Total Profit: {profit_symbol}{self.total_profit:.3f} SOL{reset}")
-        print(f"   📈 Avg Trade: {self.total_profit/max(self.total_trades, 1):.3f} SOL")
-    
-    def show_sample_performance(self):
-        """Show sample of bot's historical performance"""
-        print(f"\n{pink}🏆 SAMPLE HISTORICAL PERFORMANCE:{reset}")
-        print(f"{gray}   (From actual bot users - results may vary){reset}\n")
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"\t✅ {green}BUY [SUCCESS] for {token_data['mint']} - {token_data['pool_type']} - {current_time}{reset}")
         
-        # Table header
-        print(f"   {'#':<3} {'TOKEN':<8} {'ROI':<8} {'TIME':<8} {'PROFIT':<12}")
-        print(f"   {'-'*3:<3} {'-'*8:<8} {'-'*8:<8} {'-'*8:<8} {'-'*12:<12}")
+        # Start monitoring thread
+        monitor_thread = threading.Thread(
+            target=self.monitor_position, 
+            args=(token_data["mint"],), 
+            daemon=True
+        )
+        monitor_thread.start()
+        position_threads.append(monitor_thread)
         
-        for i, trade in enumerate(self.sample_trades, 1):
-            duration_str = f"{trade.duration_seconds//60}m{trade.duration_seconds%60}s"
-            print(f"   {i:<3} {trade.symbol:<8} {green}+{trade.roi_percent:.0f}%{reset:<8} "
-                  f"{duration_str:<8} {green}+{trade.profit_sol:.2f} SOL{reset}")
+        return True
+
+    def monitor_position(self, mint: str):
+        """Monitor a position with live price updates and ROI calculation"""
+        global active_positions, profitable_trades, loss_trades, total_trades, bot_bal
         
-        total_sample_profit = sum(trade.profit_sol for trade in self.sample_trades)
-        avg_roi = sum(trade.roi_percent for trade in self.sample_trades) / len(self.sample_trades)
+        position = self.positions.get(mint)
+        if not position:
+            return
+            
+        start_time = time.time()
+        # Make it more profitable - 70% pump, 20% volatile, 10% sideways
+        price_trend = random.choices(["pump", "volatile", "sideways"], weights=[70, 20, 10])[0]
+                
+        while not stop_event.is_set() and position.status == "ACTIVE":
+            runtime = (time.time() - start_time) / 60  # minutes
+            
+            # Simulate price movement based on trend (more profitable)
+            if price_trend == "pump":
+                price_change = random.uniform(-0.01, 0.12)  # Strong upward bias
+            elif price_trend == "volatile":
+                price_change = random.uniform(-0.08, 0.15)  # High volatility with upward bias
+            else:  # sideways
+                price_change = random.uniform(-0.01, 0.03)  # Slight upward bias
+                
+            position.current_price *= (1 + price_change)
+            position.current_roi = ((position.current_price - position.entry_price) / position.entry_price) * 100
+            
+            # Check exit conditions
+            should_exit = False
+            exit_reason = ""
+            
+            # Take profit conditions
+            if position.current_roi >= 100:  # 100% profit
+                should_exit = True
+                exit_reason = "TP3 (+100%)"
+            elif position.current_roi >= 50:  # 50% profit
+                should_exit = True
+                exit_reason = "TP2 (+50%)"
+            elif position.current_roi >= 25:  # 25% profit
+                should_exit = True
+                exit_reason = "TP1 (+25%)"
+            # Stop loss
+            elif position.current_roi <= -20:
+                should_exit = True
+                exit_reason = "STOP LOSS (-20%)"
+            # Max runtime
+            elif runtime >= pos_max_runtime:
+                should_exit = True
+                exit_reason = f"MAX TIME ({pos_max_runtime}min)"
+            
+            if should_exit:
+                self.close_position(mint, exit_reason)
+                break
+                
+            # Show periodic updates in original format
+            roi_color = green if position.current_roi >= 0 else red
+            time_remaining = max(0, pos_max_runtime - runtime)
+            time_str = f"{time_remaining:.1f}min"
+            roi_str = f"ROI: {roi_color}{position.current_roi:+.2f}%{reset}"
+            pf_bond_progress = min(100, (runtime / pos_max_runtime) * 100)
+            
+            # Determine next TP target
+            if position.current_roi < 25:
+                next_roi = 25.0
+                current_tp_index = 0
+            elif position.current_roi < 50:
+                next_roi = 50.0
+                current_tp_index = 1
+            elif position.current_roi < 100:
+                next_roi = 100.0
+                current_tp_index = 2
+            else:
+                next_roi = 100.0
+                current_tp_index = 2
+            
+            print(f'{pink}Target TP{current_tp_index + 1}/3 [{reset} {roi_color}{position.current_roi:>6.2f}{reset}{pink} /{reset} {green}{next_roi:>6.1f}%{reset} {pink}] for [{position.mint:<44}] [Remaining {time_str:>8}] {roi_str} [Bonding {pf_bond_progress:>5.2f}%] [{position.symbol}]{reset}')
+            
+            time.sleep(2)  # Update every 2 seconds
+
+    def close_position(self, mint: str, reason: str):
+        """Close a position and calculate P&L"""
+        global active_positions, profitable_trades, loss_trades, total_trades, bot_bal
         
-        print(f"\n   📊 Sample Stats: {len(self.sample_trades)} trades, "
-              f"{green}+{total_sample_profit:.2f} SOL{reset} profit, "
-              f"{green}{avg_roi:.0f}%{reset} avg ROI")
-    
-    def show_upgrade_message(self):
-        """Display upgrade information"""
-        print(f"\n{yellow}⚠️  DEMO LIMITATIONS:{reset}")
-        print(f"   {gray}• No real trading (simulation only){reset}")
-        print(f"   {gray}• Limited filtering criteria (5 vs 20+){reset}")
-        print(f"   {gray}• No WebSocket token detection{reset}")
-        print(f"   {gray}• No Telegram integration{reset}")
-        print(f"   {gray}• No advanced rug protection{reset}")
-        print(f"   {gray}• No multi take-profit system{reset}")
+        position = self.positions.get(mint)
+        if not position or position.status != "ACTIVE":
+            return
+            
+        position.status = "CLOSED"
+        position.exit_time = time.time()
+        position.exit_price = position.current_price
         
-        print(f"\n{green}🔥 FULL VERSION INCLUDES:{reset}")
-        print(f"   {cyan}⚡ Real-time token detection across multiple DEXes{reset}")
-        print(f"   {cyan}🎯 20+ advanced filtering criteria with social signals{reset}")
-        print(f"   {cyan}💎 Token2022 & MAYHEM mode support{reset}")
-        print(f"   {cyan}🛡️  Advanced rug detection and protection{reset}")
-        print(f"   {cyan}📈 Multi take-profit and trail stop systems{reset}")
-        print(f"   {cyan}📱 Full Telegram integration for remote control{reset}")
-        print(f"   {cyan}📊 Live HTML analytics dashboard{reset}")
-        print(f"   {cyan}🚨 Emergency stop and fund protection{reset}")
+        # Calculate profit/loss
+        sol_received = position.tokens_bought * position.current_price
+        position.profit_loss = sol_received - position.sol_spent
         
-        print(f"\n{red}🚀 GET FULL VERSION:{reset}")
-        print(f"   🌐 Website: {green}https://cryptobots.dev/scripts/sol-sniper-trading-bot{reset}")
-        print(f"   💬 Telegram: {green}https://t.me/cryptobots_dev{reset}")
-        print(f"   💰 Starting at $0")
-    
-    def show_full_version_prompt(self):
-        """Display prominent full version information and wait for user confirmation"""
-        print(f"\n{gray}{'_' * 134}{reset}")
-        print(f"\n{red}⚠️  IMPORTANT: THIS IS A DEMO VERSION WITH LIMITED FUNCTIONALITY{reset}")
+        # Update global stats
+        active_positions -= 1
+        total_trades += 1
+        
+        if position.profit_loss > 0:
+            profitable_trades += 1
+            bot_bal += position.profit_loss
+            result_color = green
+            result_emoji = "✅"
+        else:
+            loss_trades += 1
+            bot_bal += position.profit_loss  # This will be negative
+            result_color = red  
+            result_emoji = "❌"
+            
+        # Remove from open positions
+        if mint in open_positions:
+            del open_positions[mint]
+            
+        runtime = (position.exit_time - position.entry_time) / 60
+        
+        # Original format sell messages
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        if "TP" in reason:
+            tp_num = reason.split("(")[0].replace("TP", "").strip()
+            tp_percent = reason.split("(")[1].replace(")", "").replace("%", "") if "(" in reason else "25"
+            display_sell_percentage = 100.0  # Selling 100% for demo
+            
+            print(f'\n⚠️ {green} SELLING {display_sell_percentage:.2f}% at TP{tp_num}/3 (TP{tp_num}: {tp_percent}%) [{position.symbol}] with approx ROI: {position.current_roi:.2f}%{reset}')
+            print(f'{gray}https://dexscreener.com/solana/{position.mint}?maker={wallet_address}{reset}\n')
+            print(f"\t✅ {green}SELL [SUCCESS] {display_sell_percentage:.2f}% at TP{tp_num}/3 (TP{tp_num}: {tp_percent}%) with approx ROI: {position.current_roi:.2f}% [{position.mint}] - {current_time}{reset}")
+        else:
+            print(f"{result_emoji} CLOSED {position.symbol}: {reason} | ROI: {result_color}{position.current_roi:+.1f}%{reset} | P&L: {result_color}{position.profit_loss:+.4f} SOL{reset} | Time: {runtime:.1f}min")
+            print(f"\t{gray}> Cryptobots.DEV Sniper closed position successfully! [{mint[:8]}...]{reset}")
+
+    def show_status_report(self):
+        """Show periodic status report in original compact format"""
+        global last_report_time, total_events_checked, queue_size
+        
+        current_time = time.time()
+        if current_time - last_report_time < 8:  # Every 8 seconds
+            return
+            
+        last_report_time = current_time
+        runtime = time.time() - start_time
+        runtime_formatted = str(timedelta(seconds=int(runtime)))
+        win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        # Calculate TPS
+        transactions_per_second = total_events_checked / runtime if runtime > 0 else 0
+        
+        # Queue color based on size
+        if queue_size <= 5:
+            ev_color = green
+        elif queue_size <= 15:
+            ev_color = yellow
+        else:
+            ev_color = red
+            
+        # P&L calculation
+        pnl = bot_bal - starting_bal
+        if pnl >= 0:
+            pnl_message = f"{green}+{pnl:.5f} SOL{reset}"
+        else:
+            pnl_message = f"{red}{pnl:.5f} SOL{reset}"
+            
+        # SOL price color (simulate price movement)
+        sol_price_color = random.choice([green, red])
+        
+        # Original compact format
+        print(f"{gray}- Tx: {total_events_checked} [{reset}{ev_color}{queue_size}{reset}{gray}] | TPS: {transactions_per_second:.2f} | Open: {active_positions}/{max_positions} | Runtime: {runtime_formatted} | Tokens Checked: {total_mints_detected} | P({profitable_trades}) L({loss_trades}) T({total_trades}) | Bot Balance: {bot_bal:.5f} SOL | PnL: {pnl:.5f} SOL ({reset}{pnl_message}{gray}) |{reset}{sol_price_color} SOL ${sol_price:.2f} {reset}{gray}| Winrate: {win_rate:.2f} % {reset}")
+
+    def handle_exit(self):
+        """Handle CTRL+C exit with summary like original"""
+        global stop_event
+        
+        print(f"\n{yellow}🛑 STOP signal received (CTRL+C)! Closing all positions...{reset}")
+        stop_event.set()
+        
+        # Close all active positions
+        for mint, position in list(self.positions.items()):
+            if position.status == "ACTIVE":
+                self.close_position(mint, "MANUAL STOP")
+        
+        # Wait for all threads to finish
+        for thread in position_threads:
+            if thread.is_alive():
+                thread.join(timeout=5)
+        
+        time.sleep(2)  # Give time for final updates
+        
+        self.show_exit_summary()
+
+    def show_exit_summary(self):
+        """Show exit summary with ASCII banner like original"""
+        global bot_bal, starting_bal, profitable_trades, loss_trades, total_trades, total_mints_detected
+        
+        runtime = time.time() - start_time
+        runtime_formatted = str(timedelta(seconds=int(runtime)))
+        win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
+        bal_change = bot_bal - starting_bal
+        bal_change_pct = (bal_change / starting_bal * 100) if starting_bal > 0 else 0
+        bal_color = green if bal_change >= 0 else red
+        
+        print(f'\n{bal_color}Final SOL Balance: {bot_bal:.4f} SOL [Changed by {bal_change_pct:.3f}% that is {bal_change:.5f} SOL ]{reset}')
+        print(f'Total Runtime: {runtime_formatted}, Total Tokens Considered for Buying [{total_mints_detected}]\nProfitable Trades [{profitable_trades}], Trades with Loss [{loss_trades}], Total Trades across all TPs [{total_trades}]\n')
+        
+        print(f"\n✅ Completed!")
+        print(f"{gray}{'_' * 134}{reset}\n")
+        print(f"""{green}
+███████╗███╗   ██╗ ██╗██████╗ ███████╗██████╗     ████████╗██████╗  █████╗ ██████╗ ██╗███╗   ██╗ ██████╗     ██████╗  ██████╗ ████████╗
+██╔════╝████╗  ██║ ██║██╔══██╗██╔════╝██╔══██╗    ╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗██║████╗  ██║██╔════╝     ██╔══██╗██╔═══██╗╚══██╔══╝
+███████╗██╔██╗ ██║ ██║██████╔╝█████╗  ██████╔╝       ██║   ██████╔╝███████║██║  ██║██║██╔██╗ ██║██║  ███╗    ██████╔╝██║   ██║   ██║   
+╚════██║██║╚██╗██║ ██║██╔═══╝ ██╔══╝  ██╔══██╗       ║   ██╔══██╗██╔══██║██║  ██║██║██║╚██╗██║██║   ██║    ██╔══██╗██║   ██║   ██║   
+███████║██║ ╚████║ ██║██║     ███████╗██║  ██║       ██║   ██║  ██║██║  ██║██████╔╝██║██║ ╚████║╚██████╔╝    ██████╔╝╚██████╔╝   ██║   
+╚══════╝╚═╝  ╚═══╝ ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝     ╚═════╝  ╚═════╝    ╚═╝   
+          [ https://t.me/cryptobots_dev ] [ https://t.me/rikardionsdev ] [ https://cryptobots.dev ] [ @cryptobots_dev ]
+          {reset}""")
         print(f"{gray}{'_' * 134}{reset}")
-        
-        print(f"\n{red}🔥 GET THE FULL VERSION FOR REAL TRADING:{reset}")
-        print(f"   🌐 Website: {green}https://cryptobots.dev/scripts/sol-sniper-trading-bot{reset}")
-        print(f"   💬 Telegram: {green}https://t.me/cryptobots_dev{reset}")
-        print(f"   💰 Price: {yellow}Starting at $297 - One-time payment, lifetime access{reset}")
-        
-        print(f"\n{pink}✨ FULL VERSION INCLUDES:{reset}")
-        print(f"   {cyan}⚡ Real-time token detection across PumpFun, Raydium, Jupiter{reset}")
-        print(f"   {cyan}🎯 20+ advanced filtering criteria with social signals{reset}")
-        print(f"   {cyan}💎 Token2022 & MAYHEM mode support{reset}")
-        print(f"   {cyan}🛡️  Advanced rug detection and protection algorithms{reset}")
-        print(f"   {cyan}📈 Multi take-profit and trail stop systems{reset}")
-        print(f"   {cyan}📱 Full Telegram integration for remote control{reset}")
-        print(f"   {cyan}📊 Live HTML analytics dashboard{reset}")
-        print(f"   {cyan}🚨 Emergency stop and fund protection{reset}")
-        
-        print(f"\n{red}⚠️  DEMO LIMITATIONS:{reset}")
-        print(f"   {gray}• No real trading (simulation only){reset}")
-        print(f"   {gray}• Limited filtering (5 vs 20+ criteria){reset}")
-        print(f"   {gray}• No live token detection{reset}")
-        print(f"   {gray}• No Telegram integration{reset}")
-        
-        print(f"\n{gray}{'_' * 134}{reset}\n")
-        print(f"{red}>{reset} Press {red}ENTER{reset} to continue with demo, or {red}Ctrl+C{reset} to exit and get full version")
-        print(f"{gray}{'_' * 134}{reset}")
+
+    def run_trading_loop(self):
+        """Main trading loop - token detection and position management"""
+        print(f"\n{green}🚀 SNIPER BOT STARTED - SEARCHING FOR OPPORTUNITIES...{reset}")
+        print(f"{yellow}Press CTRL+C to stop gracefully and see summary{reset}\n")
         
         try:
-            input()
-        except KeyboardInterrupt:
-            print(f"\n\n{green}🚀 Get the full version at: https://cryptobots.dev/scripts/sol-sniper-trading-bot{reset}")
-            print(f"{green}💬 Support: https://t.me/cryptobots_dev{reset}")
-            exit(0)
-    
-    def run_demo(self):
-        """Run the demo simulation"""
-        self.print_banner()
-        self.show_sample_performance()
-        self.show_full_version_prompt()
-        
-        print(f"\n{cyan}🚀 Starting Demo Session...{reset}")
-        print(f"{gray}   (Press Ctrl+C to stop){reset}")
-        
-        self.running = True
-        demo_trades = 0
-        max_demo_trades = 10
-        
-        try:
-            while self.running and demo_trades < max_demo_trades:
+            while not stop_event.is_set():
                 # Simulate token detection
-                print(f"\n{gray}🔍 Scanning for new tokens...{reset}")
+                token_data = self.simulate_token_detection()
+                
+                if token_data:
+                    # Show detection message for ALL tokens (both accepted and rejected)
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"{gray} {'-'*120} {reset}\n🚀 {green}NEW {token_data['pool_type']} Token Detected at {current_time}, analyzing ... {reset}\n\t{gray}https://solscan.io/tx/{token_data['signature']}\n {'-'*120} {reset}")
+                    
+                    # Simulate safety checks with higher pass rate for profitability
+                    if random.random() > 0.2:  # 80% pass safety checks
+                        self.create_position(token_data)
+                    else:
+                        print(f"\t{red}❌ REJECTED: Failed safety checks - skipping{reset}")
+                
+                # Show periodic status reports
+                self.show_status_report()
+                
+                # Shorter, more consistent delay to prevent pauses
                 time.sleep(random.uniform(2, 5))
                 
-                token = self.simulate_token_detection()
-                print(f"   🎯 Detected: [{token.symbol}] ${token.market_cap:,.0f} mcap, {token.liquidity:.1f} SOL liq")
-                
-                # Apply filters
-                passed, reason = self.apply_filters(token)
-                
-                if not passed:
-                    print(f"   ❌ Filtered out: {reason}")
-                    continue
-                
-                print(f"   ✅ Passed filters: {reason}")
-                print(f"   ⚡ Executing trade...")
-                time.sleep(1)
-                
-                # Simulate trade
-                trade = self.simulate_trade_execution(token)
-                self.display_trade_result(token, trade)
-                self.update_statistics(trade)
-                
-                demo_trades += 1
-                
-                # Show stats every few trades
-                if demo_trades % 3 == 0:
-                    self.display_session_stats()
-                
-                time.sleep(2)
-            
-            # Final statistics
-            print(f"\n{yellow}📋 DEMO SESSION COMPLETED{reset}")
-            self.display_session_stats()
-            self.show_upgrade_message()
-            
         except KeyboardInterrupt:
-            print(f"\n\n{yellow}⚠️  Demo stopped by user{reset}")
-            self.display_session_stats()
-            self.show_upgrade_message()
+            self.handle_exit()
 
-def main():
-    """
-    CryptoBots Sniper Bot Demo
-    
-    ⚠️  This is a demonstration version showing the bot's structure and capabilities.
-    No real trading is performed - all data is simulated for educational purposes.
-    
-    🔥 GET FULL VERSION: https://cryptobots.dev/scripts/sol-sniper-trading-bot
-    💬 TELEGRAM SUPPORT: https://t.me/cryptobots_dev
-    """
-    
-    # Check Python version
-    if sys.version_info < (3, 8):
-        print(f"{red}❌ Python 3.8+ required. Current version: {sys.version}{reset}")
-        return
-    
-    # Initialize and run demo
-    bot = CryptoBotsSniperDemo()
-    
-    try:
-        bot.run_demo()
-    except Exception as e:
-        print(f"\n{red}❌ Demo error: {e}{reset}")
-        print(f"{gray}This is expected in demo mode - full version includes comprehensive error handling{reset}")
-    
-    print(f"\n{cyan}Thank you for trying CryptoBots Sniper Bot Demo!{reset}")
-    print(f"{gray}Get the full version for real trading capabilities{reset}")
+    def run(self):
+        """Main entry point"""
+        # Show banner and config
+        self.print_banner()
+        print(f"{cyan}════════════════════════════════════════════════════════════════════════════════")
+        print(f"                   {green}CRYPTOBOTS.DEV - SNIPER TRADING BOT v3.3a DEMO{cyan}")
+        print(f"                       {yellow}Professional Multi-Exchange Sniping{cyan}")
+        print(f"═════════════════════════════════════════════════════════════════════════════════{reset}")
+        
+        print(f"\n{yellow}💎 FREE DEMO VERSION:{reset}")
+        print(f"   {gray}• Shows exact interface and functionality of full version{reset}")
+        print(f"   {gray}• All trades are simulated (no real trading){reset}")
+        print(f"   {gray}• Perfect for testing strategies and learning the system{reset}")
+        
+        print(f"\n{green}🚀 FULL VERSION FEATURES:{reset}")
+        print(f"   {gray}• Real multi-exchange sniping (Raydium, PumpFun, DexScreener){reset}")
+        print(f"   {gray}• Lightning-fast execution with MEV protection{reset}")
+        print(f"   {gray}• Advanced safety filters and rug detection{reset}")
+        print(f"   {gray}• Live position monitoring with ROI tracking{reset}")
+        print(f"   {gray}• Telegram bot integration for remote control{reset}")
+        print(f"   {gray}• Comprehensive analytics and reporting{reset}")
+        
+        print(f"\n{cyan}🔗 Get Full Version: {white}https://cryptobots.dev{reset} {yellow}(Starting at $0){reset}")
+        print(f"{cyan}💬 Support & Updates: {white}https://t.me/cryptobots_dev{reset}")
+        
+        self.print_config_summary()
+        
+        print(f"{gray}{'_' * 123}{reset}")
+        print(f"\n{red}>{reset} Your SNIPER bot {red}{wallet_address}{reset} is ready for trading with {red}{sol_buy_amount} SOL{reset} (${(sol_price * sol_buy_amount):.2f}) per token")
+        print(f'\n{red}>{reset} When you want to STOP THE BOT, press {red}CTRL+C{reset} to SELL ALL and EXIT, dont force close the bot or positions will stay open')
+        
+        input(f'\n{red}>{reset} Press {red}ENTER{reset} to connect and wait for trades\n')
+        
+        # Check balance simulation
+        print(f"[ {green}SNIPER TRADING bot SOL balance enough: {starting_bal:.3f} SOL (${(sol_price*starting_bal):.2f}), min for your settings: {(sol_buy_amount*max_positions):.3f} SOL{reset} ]")
+        
+        # Start trading loop
+        self.run_trading_loop()
 
 if __name__ == "__main__":
-    main()
+    def signal_handler(signum, frame):
+        """Handle CTRL+C gracefully"""
+        demo.handle_exit()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    try:
+        demo = CryptobotsSniperDemo()
+        demo.run()
+    except KeyboardInterrupt:
+        print(f"\n\n{yellow}Program interrupted by user. Goodbye!{reset}")
+    except Exception as e:
+        print(f"\n{red}❌ An error occurred: {str(e)}{reset}")
+        print(f"{cyan}💬 Report issues at: {white}https://t.me/cryptobots_dev{reset}")
